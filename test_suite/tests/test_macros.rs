@@ -1135,6 +1135,18 @@ fn test_adjacently_tagged_enum() {
         ],
     );
 
+    // unit serialized as sequence of length 1
+    assert_de_tokens(
+        &AdjacentlyTagged::Unit::<u8>,
+        &[
+            Token::Seq {
+                len: Some(1),
+            },
+            Token::Str("Unit"),
+            Token::SeqEnd,
+        ],
+    );
+
     // newtype with tag first
     assert_tokens(
         &AdjacentlyTagged::Newtype::<u8>(1),

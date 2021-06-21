@@ -1438,6 +1438,32 @@ fn deserialize_adjacently_tagged_enum(
         };
     }
 
+    let is_unit_variant_arms = variants
+        .iter()
+        .enumerate()
+        .filter(|&(_, variant)| !variant.attrs.skip_deserializing())
+        .filter_map(|(i, variant)| {
+            let variant_index = field_i(i);
+            let variant_ident = &variant.ident;
+
+            let arm = match variant.style {
+                Style::Unit => quote! {
+                    _serde::__private::Some(_serde::__private::Ok(#this::#variant_ident))
+                },
+                _ => return None
+            };
+            Some(quote! {
+                __Field::#variant_index => #arm,
+            })
+        })
+        .collect::<Vec<_>>();
+    let is_unit_variant = quote! {
+        match __field {
+            #(#is_unit_variant_arms)*
+            _ => _serde::__private::None
+        }
+    };
+
     // Advance the map by one key, returning early in case of error.
     let next_key = quote! {
         try!(_serde::de::MapAccess::next_key_seed(&mut __map, #tag_or_content))
@@ -1603,6 +1629,12 @@ fn deserialize_adjacently_tagged_enum(
                 // Visit the first element - the tag.
                 match try!(_serde::de::SeqAccess::next_element(&mut __seq)) {
                     _serde::__private::Some(__field) => {
+                        // Check if we're dealing with unit variant
+                        let res = #is_unit_variant;
+                        match res {
+                            _serde::__private::Some(v) => return v,
+                            _ => {}
+                        };
                         // Visit the second element - the content.
                         match try!(_serde::de::SeqAccess::next_element_seed(
                             &mut __seq,
